@@ -8,7 +8,6 @@ use parser::parse;
 use std::io;
 use std::io::Write;
 
-
 fn main() {
     loop {
         print!("minish > ");
@@ -19,8 +18,14 @@ fn main() {
 
         let line  = input.trim();
         let tokens = tokenize(&line);
-        match tokens{
-            Ok(tokens) => println!("{:?}", tokens),
+        let parsed = tokens.as_ref().map(|t| parse(t)).unwrap();
+
+        
+        match parsed{
+            Ok(pipeline) => {
+                println!("{:?}", pipeline);
+                let _ = exec::exec(pipeline);
+            },
             Err(err) => println!("{:?}", err) // for some reason print!() does not work println!() works maybe ln adds newline 
         }
         if line == "exit"{
@@ -28,6 +33,3 @@ fn main() {
         }
     }
 }
-
-
-
