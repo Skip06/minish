@@ -48,6 +48,9 @@ pub fn parse(tokens: &[Tokens]) -> Result<Pipeline, String>{
                 if i+1 >= tokens.len(){
                     return Err("there shoiuld be filename to take input from after < ".to_string());
                 }
+                if current_cmd.stdin_from.is_some() {  // something < something < something
+                    return Err("multiple input redirections".to_string());
+                }
                 match &tokens[i + 1] {
                     Tokens::Word(filename) => {
                         current_cmd.stdin_from = Some(filename.clone());
@@ -62,6 +65,9 @@ pub fn parse(tokens: &[Tokens]) -> Result<Pipeline, String>{
                 if i+1 > tokens.len(){
                     return Err("there shoiuld be filename to take input from after < ".to_string());
                 }
+                if current_cmd.stdout_to.is_some() {  // something > something > something
+                    return Err("multiple input redirections".to_string());
+                }
                 match &tokens[i + 1] {
                     Tokens::Word(filename) => {
                         current_cmd.stdout_to = Some(filename.clone());
@@ -74,13 +80,23 @@ pub fn parse(tokens: &[Tokens]) -> Result<Pipeline, String>{
        
     }
     
-    if current_cmd.argv.is_empty(){  // | ls => sees the | and reutrns empty commnad.
-        return Err("expecting a command before pipe ".to_string());
-    } 
+    // if current_cmd.argv.is_empty(){  // | ls => sees the | and reutrns empty commnad.
+    //     return Err("expecting a command before pipe ".to_string());
+    // } 
 
-    // what about ls | => err => pipeline has one command element but then next is nothing ie argv of current_Cmd is nothing.
-    if !commands.is_empty() &&  current_cmd.argv.is_empty(){
-        return Err("expecting a command after pipe ".to_string());
+    // // what about ls | => err => pipeline has one command element but then next is nothing ie argv of current_Cmd is nothing.
+    // if !commands.is_empty() &&  current_cmd.argv.is_empty(){
+    //     return Err("expecting a command after pipe ".to_string());
+    // }
+
+    //this 2nd check could never execute . cause for samme ls |  it will enter same 1st check and reutrns 
+    
+    if current_cmd.argv.is_empty() {
+        if !commands.is_empty() {
+            return Err("expected command after '|'".to_string());
+        } else {
+            return Err("missing argv".to_string());
+        }
     }
      // what bout ls | | wc ?? when it sees 2nd pipe it will push empty command to commands vec as per code 
      // just puttin a check before doing that => if argv is empty then err
