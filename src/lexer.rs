@@ -6,7 +6,7 @@ pub enum Tokens {
     OutputRedirect,
 }
 
-pub fn tokenize(input: &str) -> Vec<Tokens> {
+pub fn tokenize(input: &str) -> Result<Vec<Tokens>, String> {
     let mut tokens = Vec::new();
     let mut current_token = String::new();
     let mut quote_mode: Option<char> = None;
@@ -45,11 +45,85 @@ pub fn tokenize(input: &str) -> Vec<Tokens> {
                 }
             }
         }
+        //what if it was like echo " then what => the qoute_mode still exist 
+        if quote_mode.is_some(){
+            return Err("you did not close the quote".to_string());
+        }
     }
 
     if !current_token.is_empty() {
         tokens.push(Tokens::Word(current_token));
     }
 
-    tokens // e.g => [Word("ls"),Pipe,Word("wc")] this will be the i/p to the parser
+    Ok(tokens) // e.g => [Word("ls"),Pipe,Word("wc")] this will be the i/p to the parser
+}
+
+#[test]
+fn basic_split() {
+    let tokens = tokenize("echo hello world");
+
+    assert_eq!(
+        tokens,
+        Ok(vec![
+            Tokens::Word("echo".to_string()),
+            Tokens::Word("hello".to_string()),
+            Tokens::Word("world".to_string()),
+        ])
+    );
+}
+
+#[test]
+fn quoted_split() {
+    let tokens = tokenize("echo \"hello world\"");
+
+    assert_eq!(
+        tokens,
+        Ok(vec![
+            Tokens::Word("echo".to_string()),
+            Tokens::Word("hello world".to_string()),
+        ])
+    );
+}
+
+#[test]
+fn single_quoted_split() {
+    let tokens = tokenize("echo 'hello world'");
+
+    assert_eq!(
+        tokens,
+        Ok(vec![
+            Tokens::Word("echo".to_string()),
+            Tokens::Word("hello world".to_string()),
+        ])
+    );
+}
+
+#[test]
+fn pipe_tokens() {
+    let tokens = tokenize("ls | wc");
+
+    assert_eq!(
+        tokens,
+        Ok(vec![
+            Tokens::Word("ls".to_string()),
+            Tokens::Pipe,
+            Tokens::Word("wc".to_string()),
+        ])
+    );
+}
+
+#[test]
+fn redirection_tokens() {
+    let tokens = tokenize("sort < names.txt > out.txt");
+
+    assert_eq!(
+        tokens,
+        Ok(vec![
+            Tokens::Word("sort".to_string()),
+            Tokens::InputRedirect,
+            Tokens::Word("names.txt".to_string()),
+            Tokens::OutputRedirect,
+            Tokens::Word("out.txt".to_string()),
+        ])
+    );
 }
