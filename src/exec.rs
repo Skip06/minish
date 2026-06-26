@@ -7,60 +7,96 @@ use std::{fs::File, process::{Command, Stdio}};
 // Return Value: It returns a Result<Child>, giving you a handle to the child process so you can check its status, stream its output, or force-kill it.
 
 pub fn exec (pipeline: Pipeline)-> Result<(), String>{
-    let cmd = &pipeline.commands[0];
-    match cmd.argv[0].as_str() {                   // builtin cd 
-        "cd" => {
+
+    if pipeline.commands.len() == 1{   // not ls | wc 
         
-            std::env::set_current_dir(&pipeline.commands[0].argv[1])
+        let cmd = &pipeline.commands[0];
+        match cmd.argv[0].as_str() {                   // builtin cd 
+            "cd" => {
+            
+                std::env::set_current_dir(&pipeline.commands[0].argv[1])
+                    .map_err(|e| e.to_string())?;
+            
+                return Ok(());
+            }
+            _ => {}
+        }
+    
+        
+        
+        //if it was echo hello we got the program name echo inside new() , other items except 1st one are arguments 
+        // the if else ladder is for "sort < name.txt > file.txt"
+        if pipeline.commands[0].stdin_from.is_some() && !pipeline.commands[0].stdout_to.is_some(){
+            let file = File::open(pipeline.commands[0].stdin_from.clone().unwrap()).map_err(|e| e.to_string())?;
+            let mut child_process = Command::new(&cmd.argv[0])
+                .args(&pipeline.commands[0].argv[1..])
+                .stdin(Stdio::from(file))
+                .spawn()
                 .map_err(|e| e.to_string())?;
         
-            return Ok(());
+            child_process.wait().map_err(|e| e.to_string())?;
         }
-        _ => {}
+        
+        else if !pipeline.commands[0].stdin_from.is_some() && pipeline.commands[0].stdout_to.is_some(){
+            let file = File::create(pipeline.commands[0].stdout_to.clone().unwrap()).map_err(|e| e.to_string())?;
+            let mut child_process = Command::new(&cmd.argv[0])
+                .args(&pipeline.commands[0].argv[1..])
+                .stdout(Stdio::from(file))
+                .spawn()
+                .map_err(|e| e.to_string())?;
+        
+            child_process.wait().map_err(|e| e.to_string())?;
+        }
+        
+        else if pipeline.commands[0].stdin_from.is_some() && pipeline.commands[0].stdout_to.is_some(){
+            let input_file = File::open(pipeline.commands[0].stdin_from.clone().unwrap()).map_err(|e| e.to_string())?;
+            let output_file = File::create(pipeline.commands[0].stdout_to.clone().unwrap()).map_err(|e| e.to_string())?;
+            let mut child_process = Command::new(&cmd.argv[0])
+                .args(&pipeline.commands[0].argv[1..])
+                .stdin(Stdio::from(input_file))
+                .stdout(Stdio::from(output_file))
+                .spawn()
+                .map_err(|e| e.to_string())?;
+        
+            child_process.wait().map_err(|e| e.to_string())?;
+        }
+        
+        else{
+            let mut child_process = Command::new(&cmd.argv[0])
+                .args(&pipeline.commands[0].argv[1..])
+                .spawn()
+                .map_err(|e| e.to_string())?;
+        
+            child_process.wait().map_err(|e| e.to_string())?;
+        }
     }
+    else {      // ls | wc
 
-    
-    
-    //if it was echo hello we got the program name echo inside new() , other items except 1st one are arguments 
-    if pipeline.commands[0].stdin_from.is_some() && !pipeline.commands[0].stdout_to.is_some(){
-        let file = File::open(pipeline.commands[0].stdin_from.clone().unwrap()).map_err(|e| e.to_string())?;
-        let mut child_process = Command::new(&cmd.argv[0])
-            .args(&pipeline.commands[0].argv[1..])
-            .stdin(Stdio::from(file))
+        
+        let cmd1 = &pipeline.commands[0];
+        let cmd2 = &pipeline.commands[1];
+
+        //spawn the first command, but capture its stdout into a pipe
+        let mut first_child = Command::new(&cmd1.argv[0])
+            .args(&cmd1.argv[1..])
+            .stdout(Stdio::piped())      // <-- key: don't print to terminal, give us a pipe
             .spawn()
             .map_err(|e| e.to_string())?;
-    
-        child_process.wait().map_err(|e| e.to_string())?;
-    }
-    else if !pipeline.commands[0].stdin_from.is_some() && pipeline.commands[0].stdout_to.is_some(){
-        let file = File::create(pipeline.commands[0].stdout_to.clone().unwrap()).map_err(|e| e.to_string())?;
-        let mut child_process = Command::new(&cmd.argv[0])
-            .args(&pipeline.commands[0].argv[1..])
-            .stdout(Stdio::from(file))
+
+        // take the pipe out of the first child's stdout
+        // first_child.stdout is Option<ChildStdout> — it exists because we said Stdio::piped()
+        let pipe = first_child.stdout.take().unwrap(); // need childstdout as pipe
+
+        // Step 3: give that pipe as stdin to the second command
+        let mut second_child = Command::new(&cmd2.argv[0])
+            .args(&cmd2.argv[1..])
+            .stdin(Stdio::from(pipe))   // <-- wire the pipe in
             .spawn()
             .map_err(|e| e.to_string())?;
-    
-        child_process.wait().map_err(|e| e.to_string())?;
-    }
-    else if pipeline.commands[0].stdin_from.is_some() && pipeline.commands[0].stdout_to.is_some(){
-        let input_file = File::open(pipeline.commands[0].stdin_from.clone().unwrap()).map_err(|e| e.to_string())?;
-        let output_file = File::create(pipeline.commands[0].stdout_to.clone().unwrap()).map_err(|e| e.to_string())?;
-        let mut child_process = Command::new(&cmd.argv[0])
-            .args(&pipeline.commands[0].argv[1..])
-            .stdin(Stdio::from(input_file))
-            .stdout(Stdio::from(output_file))
-            .spawn()
-            .map_err(|e| e.to_string())?;
-    
-        child_process.wait().map_err(|e| e.to_string())?;
-    }
-    else{
-        let mut child_process = Command::new(&cmd.argv[0])
-            .args(&pipeline.commands[0].argv[1..])
-            .spawn()
-            .map_err(|e| e.to_string())?;
-    
-        child_process.wait().map_err(|e| e.to_string())?;
+
+        // Step 4: wait for both to finish
+        first_child.wait().map_err(|e| e.to_string())?;
+        second_child.wait().map_err(|e| e.to_string())?;
     }
     Ok(())
 }
