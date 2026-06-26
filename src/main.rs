@@ -1,4 +1,3 @@
-mod builtin;
 mod exec;
 mod lexer;
 mod parser;
