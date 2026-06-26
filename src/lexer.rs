@@ -45,12 +45,12 @@ pub fn tokenize(input: &str) -> Result<Vec<Tokens>, String> {
                 }
             }
         }
-        //what if it was like echo " then what => the qoute_mode still exist 
-        if quote_mode.is_some(){
-            return Err("you did not close the quote".to_string());
-        }
+        
     }
-
+    //what if it was like echo " then what => the qoute_mode still exist 
+    if quote_mode.is_some(){
+        return Err("you did not close the quote".to_string());
+    }
     if !current_token.is_empty() {
         tokens.push(Tokens::Word(current_token));
     }

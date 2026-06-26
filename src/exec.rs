@@ -72,32 +72,40 @@ pub fn exec (pipeline: Pipeline)-> Result<(), String>{
     }
     else {      // ls | wc
 
+        let mut children = Vec::new();
+        let mut current_pipe = None;
         
-        let cmd1 = &pipeline.commands[0];
-        let cmd2 = &pipeline.commands[1];
-
-        //spawn the first command, but capture its stdout into a pipe
-        let mut first_child = Command::new(&cmd1.argv[0])
-            .args(&cmd1.argv[1..])
-            .stdout(Stdio::piped())      // <-- key: don't print to terminal, give us a pipe
-            .spawn()
-            .map_err(|e| e.to_string())?;
-
-        // take the pipe out of the first child's stdout
-        // first_child.stdout is Option<ChildStdout> — it exists because we said Stdio::piped()
-        let pipe = first_child.stdout.take().unwrap(); // need childstdout as pipe
-
-        // Step 3: give that pipe as stdin to the second command
-        let mut second_child = Command::new(&cmd2.argv[0])
-            .args(&cmd2.argv[1..])
-            .stdin(Stdio::from(pipe))   // <-- wire the pipe in
-            .spawn()
-            .map_err(|e| e.to_string())?;
-
-        // Step 4: wait for both to finish
-        first_child.wait().map_err(|e| e.to_string())?;
-        second_child.wait().map_err(|e| e.to_string())?;
+        for i in 0..pipeline.commands.len() {
+            let cmd = &pipeline.commands[i];
+        
+            let mut process = Command::new(&cmd.argv[0]);
+        
+            process.args(&cmd.argv[1..]);
+        
+            if let Some(pipe) = current_pipe.take() { // connect previous command's output
+                process.stdin(Stdio::from(pipe));
+            }
+        
+            
+            if i != pipeline.commands.len() - 1 {  // we can create pipe if its not last commnsd
+                process.stdout(Stdio::piped());
+            }
+        
+            let mut child = process
+                .spawn()
+                .map_err(|e| e.to_string())?;
+        
+            
+            current_pipe = child.stdout.take(); //  saveing this command's output for next command
+        
+            children.push(child);
+        }
+        
+        for mut child in children {
+            child.wait().map_err(|e| e.to_string())?;
+        }
     }
+        
     Ok(())
 }
 
